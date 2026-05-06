@@ -23,6 +23,54 @@ const PENTATONIC: Record<string, string[]> = {
   B: ['B', 'C#', 'D#', 'F#', 'G#'],
 };
 
+const MAJOR: Record<string, string[]> = {
+  C: ['C', 'D', 'E', 'F', 'G', 'A', 'B'],
+  D: ['D', 'E', 'F#', 'G', 'A', 'B', 'C#'],
+  E: ['E', 'F#', 'G#', 'A', 'B', 'C#', 'D#'],
+  F: ['F', 'G', 'A', 'Bb', 'C', 'D', 'E'],
+  G: ['G', 'A', 'B', 'C', 'D', 'E', 'F#'],
+  A: ['A', 'B', 'C#', 'D', 'E', 'F#', 'G#'],
+  B: ['B', 'C#', 'D#', 'E', 'F#', 'G#', 'A#'],
+};
+
+const MINOR: Record<string, string[]> = {
+  C: ['C', 'D', 'Eb', 'F', 'G', 'Ab', 'Bb'],
+  D: ['D', 'E', 'F', 'G', 'A', 'Bb', 'C'],
+  E: ['E', 'F#', 'G', 'A', 'B', 'C', 'D'],
+  F: ['F', 'G', 'Ab', 'Bb', 'C', 'Db', 'Eb'],
+  G: ['G', 'A', 'Bb', 'C', 'D', 'Eb', 'F'],
+  A: ['A', 'B', 'C', 'D', 'E', 'F', 'G'],
+  B: ['B', 'C#', 'D', 'E', 'F#', 'G', 'A'],
+};
+
+const DORIAN: Record<string, string[]> = {
+  C: ['C', 'D', 'Eb', 'F', 'G', 'A', 'Bb'],
+  D: ['D', 'E', 'F', 'G', 'A', 'B', 'C'],
+  E: ['E', 'F#', 'G', 'A', 'B', 'C#', 'D'],
+  F: ['F', 'G', 'Ab', 'Bb', 'C', 'D', 'Eb'],
+  G: ['G', 'A', 'Bb', 'C', 'D', 'E', 'F'],
+  A: ['A', 'B', 'C', 'D', 'E', 'F#', 'G'],
+  B: ['B', 'C#', 'D', 'E', 'F#', 'G#', 'A'],
+};
+
+const CHROMATIC: Record<string, string[]> = {
+  C: ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'],
+  D: ['D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B', 'C', 'C#'],
+  E: ['E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B', 'C', 'C#', 'D', 'D#'],
+  F: ['F', 'F#', 'G', 'G#', 'A', 'A#', 'B', 'C', 'C#', 'D', 'D#', 'E'],
+  G: ['G', 'G#', 'A', 'A#', 'B', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#'],
+  A: ['A', 'A#', 'B', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#'],
+  B: ['B', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#'],
+};
+
+const SCALES: Record<string, Record<string, string[]>> = {
+  pentatonic: PENTATONIC,
+  major: MAJOR,
+  minor: MINOR,
+  dorian: DORIAN,
+  chromatic: CHROMATIC,
+};
+
 // Amber palette
 const AMBER = '#ffb000';
 const AMBER_GLOW = '#ffcc44';
@@ -74,6 +122,7 @@ interface PixelGridProps {
   accentGlow?: string;
   bgColor?: string;
   brushColor?: string;
+  scaleDef?: string[];
 }
 
 export const PixelGrid = forwardRef<PixelGridHandle, PixelGridProps>(
@@ -85,7 +134,7 @@ export const PixelGrid = forwardRef<PixelGridHandle, PixelGridProps>(
       pan = 0, resonance = 50, drive = 0, muted = false,
       onColTriggered,
       accentColor = AMBER, accentGlow = AMBER_GLOW, bgColor = DARK,
-      brushColor,
+      brushColor, scaleDef,
     },
     ref
   ) => {
@@ -97,6 +146,8 @@ export const PixelGrid = forwardRef<PixelGridHandle, PixelGridProps>(
     const [lastCell, setLastCell] = useState<[number, number] | null>(null);
     const gridRef = useRef(grid);
     gridRef.current = grid;
+    const scaleDefRef = useRef(scaleDef);
+    scaleDefRef.current = scaleDef;
 
     // Color per cell — tracks which brush color was used
     const colorGridRef = useRef<(string | null)[][]>(
@@ -286,7 +337,7 @@ export const PixelGrid = forwardRef<PixelGridHandle, PixelGridProps>(
 
     const rowToNote = useCallback(
       (row: number): string => {
-        const scale = PENTATONIC[rootKey] || PENTATONIC.C;
+        const scale = scaleDefRef.current || PENTATONIC[rootKey] || PENTATONIC.C;
         const noteIdx = ROWS - 1 - row;
         const scaleIdx = noteIdx % scale.length;
         const oct = Math.floor(noteIdx / scale.length) + 2 + octaveShift;
@@ -515,7 +566,7 @@ export const PixelGrid = forwardRef<PixelGridHandle, PixelGridProps>(
         }
 
         // Octave lines
-        const scale = PENTATONIC[rootKey] || PENTATONIC.C;
+        const scale = scaleDefRef.current || PENTATONIC[rootKey] || PENTATONIC.C;
         ctx.strokeStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.12)`;
         for (let r = 0; r <= ROWS; r++) {
           if ((ROWS - r) % scale.length === 0) {
@@ -637,4 +688,4 @@ export const PixelGrid = forwardRef<PixelGridHandle, PixelGridProps>(
 );
 
 PixelGrid.displayName = 'PixelGrid';
-export { DEFAULT_COLS as COLS, DEFAULT_ROWS as ROWS, PENTATONIC, RESOLUTIONS };
+export { DEFAULT_COLS as COLS, DEFAULT_ROWS as ROWS, PENTATONIC, SCALES, RESOLUTIONS };
