@@ -2,7 +2,7 @@
 
 A browser-based audio sequencer and synthesizer — draw notes on a pixel grid, watch them play back as synthesized sound in real time.
 
-**[Live demo link here]** &nbsp;|&nbsp; Built with React · TypeScript · Tone.js · Canvas API
+**[Live demo](https://pixelsynth-six.vercel.app)** &nbsp;|&nbsp; Built with React · TypeScript · Tone.js · Canvas API
 
 ---
 
