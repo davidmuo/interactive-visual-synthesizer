@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import * as Tone from 'tone';
-import { PixelGrid, PixelGridHandle, COLS, ROWS, RESOLUTIONS, PENTATONIC } from './components/PixelGrid';
+import { PixelGrid, PixelGridHandle, COLS, ROWS, RESOLUTIONS, PENTATONIC, SCALES } from './components/PixelGrid';
 import { WaveformDisplay } from './components/WaveformDisplay';
 import { DrumMachine } from './components/DrumMachine';
 import { RetroKeyboard } from './components/RetroKeyboard';
@@ -82,6 +82,23 @@ function makePreset(name: string, cols: number = COLS, rows: number = ROWS): boo
 
 const PRESETS = ['arpeggio', 'stardust', 'ocean', 'chords', 'cascade', 'shimmer'];
 
+const SCALE_TYPES = ['pentatonic', 'major', 'minor', 'dorian', 'chromatic'] as const;
+type ScaleType = typeof SCALE_TYPES[number];
+
+// ── Session persistence ──
+const SESSION_KEY = 'pixelsynth-v1';
+
+function loadSession(): Record<string, unknown> | null {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function saveSession(data: Record<string, unknown>) {
+  try { localStorage.setItem(SESSION_KEY, JSON.stringify(data)); } catch {}
+}
+
 // ── Themed components ──
 function ABtn({ children, onClick, active, className = '', small = false, danger = false, color = '#ffb000', bgColor = '#0c0c14' }: {
   children: React.ReactNode; onClick?: () => void; active?: boolean; className?: string; small?: boolean; danger?: boolean; color?: string; bgColor?: string;
@@ -150,50 +167,56 @@ function Section({ title, children, defaultOpen = true, color = '#ffb000', bgCol
 
 export default function App() {
   const gridRef = useRef<PixelGridHandle>(null);
-  const [themeKey, setThemeKey] = useState<ThemeKey>('amber');
+
+  // Load persisted session once on mount (IIFE runs synchronously before any useState)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const ss = (() => loadSession())();
+
+  const [themeKey, setThemeKey] = useState<ThemeKey>((ss?.theme as ThemeKey) ?? 'amber');
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentCol, setCurrentCol] = useState(0);
-  const [rootKey, setRootKey] = useState('C');
-  const [octaveShift, setOctaveShift] = useState(0);
-  const [reverbWet, setReverbWet] = useState(0.4);
-  const [delayWet, setDelayWet] = useState(0.25);
-  const [delayTime, setDelayTime] = useState<string>('8n');
-  const [filterFreq, setFilterFreq] = useState(5000);
-  const [volume, setVolume] = useState(-8);
-  const [bpm, setBpm] = useState(110);
-  const [waveform, setWaveform] = useState<typeof WAVEFORMS[number]>('triangle');
-  const [attack, setAttack] = useState(0.1);
-  const [release, setRelease] = useState(0.8);
-  const [chorusWet, setChorusWet] = useState(0.3);
-  const [swing, setSwing] = useState(0);
+  const [rootKey, setRootKey] = useState((ss?.key as string) ?? 'C');
+  const [octaveShift, setOctaveShift] = useState((ss?.octave as number) ?? 0);
+  const [reverbWet, setReverbWet] = useState((ss?.reverb as number) ?? 0.4);
+  const [delayWet, setDelayWet] = useState((ss?.delay as number) ?? 0.25);
+  const [delayTime, setDelayTime] = useState<string>((ss?.delayTime as string) ?? '8n');
+  const [filterFreq, setFilterFreq] = useState((ss?.filter as number) ?? 5000);
+  const [volume, setVolume] = useState((ss?.volume as number) ?? -8);
+  const [bpm, setBpm] = useState((ss?.bpm as number) ?? 110);
+  const [waveform, setWaveform] = useState<typeof WAVEFORMS[number]>((ss?.waveform as typeof WAVEFORMS[number]) ?? 'triangle');
+  const [attack, setAttack] = useState((ss?.attack as number) ?? 0.1);
+  const [release, setRelease] = useState((ss?.release as number) ?? 0.8);
+  const [chorusWet, setChorusWet] = useState((ss?.chorus as number) ?? 0.3);
+  const [swing, setSwing] = useState((ss?.swing as number) ?? 0);
+  const [scaleType, setScaleType] = useState<ScaleType>((ss?.scaleType as ScaleType) ?? 'pentatonic');
   const [tool, setTool] = useState<'draw' | 'erase' | 'line'>('draw');
   const [presetIdx, setPresetIdx] = useState(0);
   const [activeNotes, setActiveNotes] = useState<string[]>([]);
   const [noteCount, setNoteCount] = useState(0);
-  const [resolutionIdx, setResolutionIdx] = useState(1);
+  const [resolutionIdx, setResolutionIdx] = useState((ss?.resolutionIdx as number) ?? 1);
   const [instrumentsOpen, setInstrumentsOpen] = useState(false);
   const [mixerOpen, setMixerOpen] = useState(true);
-  const [pan, setPan] = useState(0);
-  const [resonance, setResonance] = useState(50);
-  const [drive, setDrive] = useState(0);
+  const [pan, setPan] = useState((ss?.pan as number) ?? 0);
+  const [resonance, setResonance] = useState((ss?.resonance as number) ?? 50);
+  const [drive, setDrive] = useState((ss?.drive as number) ?? 0);
   const [muted, setMuted] = useState(false);
   const [soloed, setSoloed] = useState(false);
   const [isMasterRecording, setIsMasterRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   // XY Pad
-  const [xyX, setXyX] = useState(0.5);
-  const [xyY, setXyY] = useState(0.5);
-  const [xyMode, setXyMode] = useState<'filter' | 'space' | 'shape'>('filter');
-  const [inverted, setInverted] = useState(false);
+  const [xyX, setXyX] = useState((ss?.xyX as number) ?? 0.5);
+  const [xyY, setXyY] = useState((ss?.xyY as number) ?? 0.5);
+  const [xyMode, setXyMode] = useState<'filter' | 'space' | 'shape'>((ss?.xyMode as 'filter' | 'space' | 'shape') ?? 'filter');
+  const [inverted, setInverted] = useState((ss?.inverted as boolean) ?? false);
   const [showSaveMenu, setShowSaveMenu] = useState(false);
-  const [brushColor, setBrushColor] = useState<string | null>(null); // null = use theme accent
-  const [brushHue, setBrushHue] = useState(30);
-  const [brushSat, setBrushSat] = useState(100);
-  const [brushLit, setBrushLit] = useState(55);
-  const [canvasColor, setCanvasColor] = useState<string | null>(null); // null = use theme bg
-  const [canvasHue, setCanvasHue] = useState(240);
-  const [canvasSat, setCanvasSat] = useState(10);
-  const [canvasLit, setCanvasLit] = useState(8);
+  const [brushColor, setBrushColor] = useState<string | null>((ss?.brushColor as string) ?? null);
+  const [brushHue, setBrushHue] = useState((ss?.brushHue as number) ?? 30);
+  const [brushSat, setBrushSat] = useState((ss?.brushSat as number) ?? 100);
+  const [brushLit, setBrushLit] = useState((ss?.brushLit as number) ?? 55);
+  const [canvasColor, setCanvasColor] = useState<string | null>((ss?.canvasColor as string) ?? null);
+  const [canvasHue, setCanvasHue] = useState((ss?.canvasHue as number) ?? 240);
+  const [canvasSat, setCanvasSat] = useState((ss?.canvasSat as number) ?? 10);
+  const [canvasLit, setCanvasLit] = useState((ss?.canvasLit as number) ?? 8);
   const [colorTarget, setColorTarget] = useState<'brush' | 'canvas'>('brush');
 
   // Shortcuts overlay
@@ -221,7 +244,7 @@ export default function App() {
   const currentRes = RESOLUTIONS[resolutionIdx];
   const gridCols = currentRes.cols;
   const gridRows = currentRes.rows;
-  const scale = PENTATONIC[rootKey] || PENTATONIC.C;
+  const scale = (SCALES[scaleType] || PENTATONIC)[rootKey] || PENTATONIC.C;
 
   // XY pad handlers — map XY values directly to sound params (no useEffect loop)
   const handleXyXChange = useCallback((v: number) => {
@@ -242,6 +265,32 @@ export default function App() {
     const g = gridRef.current?.getGrid();
     if (g) { let count = 0; g.forEach((r) => r.forEach((c) => { if (c) count++; })); setNoteCount(count); }
   }, [currentCol]);
+
+  // Restore saved grid on first mount (after PixelGrid handle is ready)
+  useEffect(() => {
+    if (ss?.grid) gridRef.current?.setGrid(ss.grid as boolean[][]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Auto-save session to localStorage (debounced 600 ms)
+  useEffect(() => {
+    const t = setTimeout(() => {
+      saveSession({
+        theme: themeKey, key: rootKey, octave: octaveShift,
+        bpm, reverb: reverbWet, delay: delayWet, delayTime, filter: filterFreq,
+        volume, waveform, attack, release, chorus: chorusWet, swing,
+        pan, resonance, drive, scaleType, resolutionIdx,
+        xyX, xyY, xyMode, inverted,
+        brushColor, brushHue, brushSat, brushLit,
+        canvasColor, canvasHue, canvasSat, canvasLit,
+        grid: gridRef.current?.getGrid(),
+      });
+    }, 600);
+    return () => clearTimeout(t);
+  }, [themeKey, rootKey, octaveShift, bpm, reverbWet, delayWet, delayTime, filterFreq,
+      volume, waveform, attack, release, chorusWet, swing, pan, resonance, drive,
+      scaleType, resolutionIdx, xyX, xyY, xyMode, inverted,
+      brushColor, brushHue, brushSat, brushLit, canvasColor, canvasHue, canvasSat, canvasLit]);
 
   useEffect(() => {
     if (!isPlaying) { if (intervalRef.current) clearTimeout(intervalRef.current); return; }
@@ -515,7 +564,7 @@ export default function App() {
           <span>STEP {String(currentCol + 1).padStart(2, '0')}/{gridCols}</span>
           <span>{gridCols}&times;{gridRows}</span>
           <span>{noteCount} notes</span>
-          <span>{rootKey} pentatonic</span>
+          <span>{rootKey} {scaleType}</span>
           {activeNotes.length > 0 && (
             <span style={{ color: theme.glow, opacity: 1, textShadow: `0 0 4px rgba(${rgb.r},${rgb.g},${rgb.b},0.4)` }}>
               {activeNotes.slice(0, 4).join(' ')}
@@ -722,6 +771,7 @@ export default function App() {
                   accentGlow={glowC}
                   bgColor={canvasBg}
                   brushColor={brushColor || tc}
+                  scaleDef={scale}
                 />
               </div>
             </div>
@@ -883,7 +933,14 @@ export default function App() {
           <Divider color={tc} />
 
           {/* Scale — collapsible, collapsed by default */}
-          <Section title={`SCALE: ${rootKey} PENTA`} defaultOpen={false} color={tc} bgColor={bgColor}>
+          <Section title={`SCALE: ${rootKey} ${scaleType.slice(0, 5).toUpperCase()}`} defaultOpen={false} color={tc} bgColor={bgColor}>
+            <div className="grid grid-cols-5 gap-0.5 mb-2">
+              {SCALE_TYPES.map((s) => (
+                <ABtn key={s} onClick={() => setScaleType(s)} active={scaleType === s} small color={tc} bgColor={bgColor}>
+                  {s === 'pentatonic' ? 'PENT' : s === 'chromatic' ? 'CHR' : s.slice(0, 3).toUpperCase()}
+                </ABtn>
+              ))}
+            </div>
             <div className="flex flex-wrap gap-1">
               {scale.map((note: string, i: number) => (
                 <div key={i} style={{
